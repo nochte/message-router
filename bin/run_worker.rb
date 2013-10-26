@@ -1,5 +1,5 @@
 require "./lib/numerex/message/router/version"
-require "./lib/numerex/message/router.rb"
+require "./lib/numerex/message/router"
 
 #here, we're going to read a config file to determine
 #  things like what worker class (a symbol) to load

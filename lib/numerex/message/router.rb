@@ -12,7 +12,6 @@ module Numerex
 
         #override this method
         def get_worker_queue_attributes
-          raise "Not Implemented. Should return an object and a method in an array: [[], :pop]"
           [[], :pop]
         end
 
