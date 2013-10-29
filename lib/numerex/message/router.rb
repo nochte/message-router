@@ -4,15 +4,14 @@ module Numerex
   module Message
     module Router
       class Base
-
-      end
-
-      class Worker
         MINIMUM_RESULTS_TO_KEEP = 20
+        @@is_persistent = false
 
         #override this method
-        def get_worker_queue_attributes
-          [[], :pop]
+        #note: if a message is passed in, then the return should be
+        #  the specific queue that the message is destined for
+        def get_worker_queue_attributes message = nil
+          {:queue => [], :dequeue => :pop, :enqueue => :push}
         end
 
         #override this method
@@ -30,12 +29,15 @@ module Numerex
         def setup
           @state = :initializing
           begin
-            Timeout::timeout(30) do
-              @queue, @dequeue_method = get_worker_queue_attributes
+            Timeout::timeout(1) do
+              @queue_attributes = get_worker_queue_attributes
+              @queue = @queue_attributes[:queue]
+              @enqueue_method = @queue_attributes[:enqueue]
+              @dequeue_method = @queue_attributes[:dequeue]
             end
           rescue Timeout::Error => ee
             @state = :idle
-            die
+            die unless long_running?
           end
         end
 
@@ -51,13 +53,26 @@ module Numerex
 
         def get_next_job
           begin
-            Timeout::timeout(30) do
+            Timeout::timeout(1) do
               @queue.send(@dequeue_method)
             end
           rescue Timeout::Error => ee
             setup
             get_next_job
           end
+        end
+
+        def enqueue_message message
+          qa = get_worker_queue_attributes message
+          qa[:queue].send(qa[:enqueue], message)
+        end
+
+        def dequeue_message message
+          raise "not implemented yet"
+        end
+
+        def long_running?
+          @@is_persistent
         end
 
         protected
