@@ -4,6 +4,8 @@ module Numerex
   module Message
     module Router
       class Base
+        attr_accessor :state, :worker_queue, :worker_dequeue_method
+
         MINIMUM_RESULTS_TO_KEEP = 20
         @@is_persistent = false
 
@@ -26,19 +28,17 @@ module Numerex
           @messages_processed_results = [] #we're going to hold timings in this here array
         end
 
+        #do not override this unless you know what you're doing
         def setup
           @state = :initializing
+          @queue_attributes = @worker_queue = @worker_dequeue_method = nil
           begin
-            Timeout::timeout(1) do
-              @queue_attributes = get_worker_queue_attributes
-              @queue = @queue_attributes[:queue]
-              @enqueue_method = @queue_attributes[:enqueue]
-              @dequeue_method = @queue_attributes[:dequeue]
-            end
-          rescue Timeout::Error => ee
-            @state = :idle
-            die unless long_running?
-          end
+            @queue_attributes = self.get_worker_queue_attributes
+          end while @queue_attributes.nil?
+
+          @worker_queue = @queue_attributes[:queue]
+          @worker_dequeue_method = @queue_attributes[:dequeue]
+          @state = :idle
         end
 
         def run
@@ -52,14 +52,12 @@ module Numerex
         end
 
         def get_next_job
-          begin
-            Timeout::timeout(1) do
-              @queue.send(@dequeue_method)
-            end
-          rescue Timeout::Error => ee
-            setup
-            get_next_job
+          job = dequeue_message
+          while job.nil?
+            self.setup
+            job = dequeue_message if @worker_queue
           end
+          job
         end
 
         def enqueue_message message
@@ -67,8 +65,8 @@ module Numerex
           qa[:queue].send(qa[:enqueue], message)
         end
 
-        def dequeue_message message
-          raise "not implemented yet"
+        def dequeue_message
+          @worker_queue.send(@worker_dequeue_method)
         end
 
         def long_running?
