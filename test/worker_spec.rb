@@ -1,10 +1,11 @@
-require './libmessage/router'
+require './lib/message/worker'
 
 describe "worker" do
   let(:message){ "test message" }
+  let(:mock_queue_attributes) { {:queue => [], :dequeue => :pop, :enqueue => :push} }
 
   before :each do
-    @worker = Message::Router::Base.new
+    @worker = Message::Worker::Base.new
   end
 
   describe "get_worker_queue_attributes" do
@@ -30,7 +31,6 @@ describe "worker" do
     end
   end
 
-  let(:mock_queue_attributes) { {:queue => [], :dequeue => :pop, :enqueue => :push} }
   describe ".enqueue_message" do
     it "should call get_worker_queue_attributes with the message as a parameter" do
       @worker.should_receive(:get_worker_queue_attributes).with(message).once.and_return(mock_queue_attributes)
@@ -203,7 +203,16 @@ describe "worker" do
   end
 
   describe ".spin_down" do
+    it "should set state to :spinning_down" do
+      @worker.spin_down
+      @worker.state.should == :spinning_down
+    end
 
+    it "should call die instead of claiming another job" do
+      @worker.should_receive(:die).exactly(1)
+      @worker.spin_down
+      @worker.setup
+    end
   end
 
   describe ".status" do

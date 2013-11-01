@@ -1,7 +1,7 @@
 require 'timeout'
 
 module Message
-  module Router
+  module Worker
     class Base
       attr_accessor :state, :worker_queue, :worker_dequeue_method
 
@@ -29,6 +29,7 @@ module Message
 
       #do not override this unless you know what you're doing
       def setup
+        die if @state == :spinning_down
         @state = :initializing
         @queue_attributes = @worker_queue = @worker_dequeue_method = nil
         begin
@@ -70,6 +71,10 @@ module Message
 
       def long_running?
         @@is_persistent
+      end
+
+      def spin_down
+        @state = :spinning_down
       end
 
       protected
