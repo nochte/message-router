@@ -1,12 +1,13 @@
-# Numerex::Message::Router
+# Message::Router
 
-TODO: Write a gem description
+Message::Router serves as a base class for processing of incoming activemq messages. It will route messages to a queue
+    for another process to handle
 
 ## Installation
 
 Add this line to your application's Gemfile:
 
-    gem 'numerex-message-router'
+    gem 'message-router'
 
 And then execute:
 
@@ -14,7 +15,7 @@ And then execute:
 
 Or install it yourself as:
 
-    $ gem install numerex-message-router
+    $ gem install message-router
 
 ## Usage
 

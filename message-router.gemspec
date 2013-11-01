@@ -1,15 +1,15 @@
 # coding: utf-8
 lib = File.expand_path('../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'numerex/message/router/version'
+require 'message/router/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "numerex-message-router"
-  spec.version       = Numerex::Message::Router::VERSION
+  spec.name          = "message-router"
+  spec.version       = Message::Router::VERSION
   spec.authors       = ["Nate Rowland"]
   spec.email         = ["nochte@gmail.com"]
-  spec.description   = %q{numerex-message-router high-throughput routing of activemq messages}
-  spec.summary       = %q{numerex-message-router handles high-throughput routing of messages from activemq into an
+  spec.description   = %q{message-router high-throughput routing of activemq messages}
+  spec.summary       = %q{message-router handles high-throughput routing of messages from activemq into an
                           arbitrary shared memory data store. By default, that is redis.}
   spec.homepage      = ""
   spec.license       = "MIT"

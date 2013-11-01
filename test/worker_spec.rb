@@ -1,10 +1,10 @@
-require './lib/numerex/message/router'
+require './libmessage/router'
 
 describe "worker" do
   let(:message){ "test message" }
 
   before :each do
-    @worker = Numerex::Message::Router::Base.new
+    @worker = Message::Router::Base.new
   end
 
   describe "get_worker_queue_attributes" do
