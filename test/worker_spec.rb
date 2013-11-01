@@ -3,6 +3,7 @@ require './lib/message/worker'
 describe "worker" do
   let(:message){ "test message" }
   let(:mock_queue_attributes) { {:queue => [], :dequeue => :pop, :enqueue => :push} }
+  let(:mock_full_queue_attributes) { {:queue => (1..25).map{|x| x}, :dequeue => :pop, :enqueue => :push} }
 
   before :each do
     @worker = Message::Worker::Base.new
@@ -216,12 +217,59 @@ describe "worker" do
   end
 
   describe ".status" do
+    context "without being initialized" do
+      it "should have a set of values, returned as a hash, set t" do
+        status = @worker.status
+        {   work_queue_size: nil, average_message_process_time: nil,
+            total_run_time: 0, total_messages_processed: 0,
+            state: :initializing}.each do |key, expected_value|
+              expected_value.is_a?(Numeric) ? status[key].to_i.should == expected_value.to_i : status[key].should == expected_value
+        end
+      end
+    end
 
+    context "after setup, while idle" do
+      it "should have a set of values, returned as a hash" do
+        @worker.stub(:get_worker_queue_attributes).and_return mock_queue_attributes
+        @worker.setup
+        status = @worker.status
+        {   work_queue_size: 0, average_message_process_time: nil,
+            total_run_time: 0, total_messages_processed: 0,
+            state: :idle}.each do |key, expected_value|
+              expected_value.is_a?(Numeric) ? status[key].to_i.should == expected_value.to_i : status[key].should == expected_value
+        end
+      end
+    end
+
+    context "after setup, during work" do
+      it "should have a set of values, returned as a hash" do
+        original_queue_length = mock_full_queue_attributes[:queue].length
+        @worker.stub(:get_worker_queue_attributes).and_return mock_full_queue_attributes
+        @worker.setup
+        @worker.stub(:process_job){sleep 0.1}
+        t = Thread.new do
+          Timeout::timeout 1 do
+            @worker.run
+          end rescue nil
+        end
+        sleep 0.3
+        status = @worker.status
+        status[:work_queue_size].should < original_queue_length
+        status[:total_run_time].should > 0
+        status[:total_messages_processed].should > 0
+        status[:state].should == :working
+        t.join
+      end
+    end
   end
 
   describe ".process_job" do
     it "should respond" do
       @worker.respond_to?(:process_job).should == true
+    end
+
+    it "should throw an exception when process_job is called" do
+      expect {@worker.process_job}.to raise_error
     end
   end
 

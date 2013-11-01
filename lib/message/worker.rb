@@ -77,14 +77,27 @@ module Message
         @state = :spinning_down
       end
 
+      def status
+        {
+            work_queue_size: @worker_queue.nil? ? nil : @worker_queue.respond_to?(:length) ? @worker_queue.length : -1,
+            average_message_process_time: @messages_processed_results.length > 0 ?
+                              @messages_processed_results.reduce(:+) / @messages_processed_results.length.to_f :
+                              nil,
+            total_run_time: (@state == :initializing and @messages_processed == 0) ? 0 : Time.now - @start_time,
+            total_messages_processed: @messages_processed,
+            state: @state
+        }
+      end
+
       protected
       def die
         exit 0
       end
 
       def log_results time
-        @message_processed_results << Time.now - work_time_start
-        @message_processed_results.slice! 1, MINIMUM_RESULTS_TO_KEEP if @message_processed_results.length > MINIMUM_RESULTS_TO_KEEP * 2
+        @messages_processed_results << time
+        @messages_processed += 1
+        @messages_processed_results.slice! 1, MINIMUM_RESULTS_TO_KEEP if @messages_processed_results.length > MINIMUM_RESULTS_TO_KEEP * 2
       end
     end
   end
