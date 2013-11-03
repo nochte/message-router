@@ -1,9 +1,11 @@
 require 'timeout'
+require 'json'
 
 module Message
   module Worker
     class Base
       attr_accessor :state, :worker_queue, :worker_dequeue_method
+      attr_reader :command_thread
 
       MINIMUM_RESULTS_TO_KEEP = 20
       @@is_persistent = false
@@ -25,6 +27,7 @@ module Message
         @state = :initializing
         @messages_processed = 0
         @messages_processed_results = [] #we're going to hold timings in this here array
+        @command_thread = start_command_thread
       end
 
       #do not override this unless you know what you're doing
@@ -75,6 +78,7 @@ module Message
 
       def spin_down
         @state = :spinning_down
+        { state: :spinning_down }
       end
 
       def status
@@ -89,6 +93,15 @@ module Message
         }
       end
 
+      def terminate
+        Thread.new do
+          sleep 1
+          exit 0
+        end
+        { success: true }
+      end
+
+
       protected
       def die
         exit 0
@@ -98,6 +111,25 @@ module Message
         @messages_processed_results << time
         @messages_processed += 1
         @messages_processed_results.slice! 1, MINIMUM_RESULTS_TO_KEEP if @messages_processed_results.length > MINIMUM_RESULTS_TO_KEEP * 2
+      end
+
+      def start_command_thread
+        @command_thread = Thread.new do
+          while command = STDIN.gets.chomp
+            retval = nil
+            case command.downcase
+              when "status"
+                retval = status
+              when "spin_down"
+                retval = spin_down
+              when "terminate"
+                retval = terminate
+              else
+                retval = { error: "bad_input", input: command }
+            end
+            puts "#{retval.to_json}"
+          end
+        end
       end
     end
   end
