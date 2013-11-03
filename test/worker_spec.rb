@@ -73,7 +73,6 @@ describe "worker" do
           @worker.state.should == :initializing
         end
         @worker.stub(:get_worker_queue_attributes){sleep 1; mock_queue_attributes}
-        @worker.send(:state=, :null)
         @worker.setup
         t.join
       end

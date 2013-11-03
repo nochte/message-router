@@ -4,8 +4,8 @@ require 'json'
 module Message
   module Worker
     class Base
-      attr_accessor :state, :worker_queue, :worker_dequeue_method
-      attr_reader :command_thread
+      attr_accessor :worker_queue, :worker_dequeue_method
+      attr_reader :command_thread, :state
 
       MINIMUM_RESULTS_TO_KEEP = 20
       @@is_persistent = false
