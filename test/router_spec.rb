@@ -31,7 +31,7 @@ describe "router" do
         @router.configuration['connections']['test1'].should_not be_nil
         @router.configuration['connections']['test1']['host'].should_not be_nil
         @router.configuration['connections']['test1']['login'].should_not be_nil
-        @router.configuration['connections']['test1']['password'].should_not be_nil
+        @router.configuration['connections']['test1']['passcode'].should_not be_nil
       end
 
       it "should allow the dev to override the default config file with ::APP_ROOT" do
@@ -67,33 +67,57 @@ describe "router" do
       end
     end
 
-    describe ".get_incoming_queue" do
+    describe ".incoming_queue" do
       it "should lazily connect to the configured queue" do
-        @router.instance_variables.include?(:@incoming_queues).should == false
-        @router.get_incoming_queue
-        @router.instance_variables.include?(:@incoming_queues).should == true
+        @router.instance_variables.include?(:@incoming_queue).should == false
+        @router.incoming_queue
+        @router.instance_variables.include?(:@incoming_queue).should == true
       end
 
       it "should keep a persistent connection" do
-        q1 = @router.get_incoming_queue
-        q2 = @router.get_incoming_queue
-        q1.object_id.should == q2.object_id
+        q1 = @router.incoming_queue
+        q2 = @router.incoming_queue
+        q1.should == q2
       end
 
-      it "should add .on_incoming_message as a listener to the incoming queue" do
-        1.should == 2
+      it "should subscribe the the configured queue" do
+        configuration = @router.configuration
+        incoming_queue = configuration['incoming_queues'].keys.first
+        auth = configuration['connections'][incoming_queue]
+        connection_string = "stomp://#{auth['login']}:#{auth['passcode']}@#{auth['host']}"
+        client = OnStomp.connect(connection_string)
+        OnStomp.stub(:connect).and_return(client)
+        client.should_receive(:subscribe)
+        @router.incoming_queue
       end
     end
 
     describe ".on_incoming_message" do
+      let(:message) {'{"hi":"there"}'}
+      it "should parse the message" do
+        JSON.should_receive(:parse)
+        @router.on_incoming_message(message)
+      end
+
+      it "should call enqueue_message" do
+        @router.should_receive(:enqueue_message)
+        @router.on_incoming_message(message)
+      end
+
+      it "should write malformed messages to the log" do
+        @router.should_receive(:log)
+        @router.on_incoming_message("bad message")
+      end
     end
   end
 
+  #c&c involves calling on the router to get stats, manually spin up or down workers
   context "Command and Control" do
 
   end
 
+  #process management involves spinning
   context "Process Management" do
-
+    describe
   end
 end

@@ -7,7 +7,6 @@ module Message
   module Worker
     include OnStomp
 
-
     class Base
       attr_accessor :worker_queue, :worker_dequeue_method
       attr_reader :command_thread, :state
@@ -18,7 +17,7 @@ module Message
       #override this method
       #note: if a message is passed in, then the return should be
       #  the specific queue that the message is destined for
-      def get_worker_queue_attributes message = nil
+      def worker_queue_attributes message = nil
         @queue ||= []
         {:queue => @queue, :dequeue => :pop, :enqueue => :push}
       end
@@ -26,6 +25,11 @@ module Message
       #override this method
       def process_job job
         raise "Not implemented yet. This is where you implement your business logic"
+      end
+
+      #override this method if you want to handle routing yourself
+      def on_incoming_message message
+        enqueue_message JSON.parse(message) rescue log :error, "Failed to parse: #{message}"
       end
 
 
@@ -40,7 +44,7 @@ module Message
       end
 
       def enqueue_message message
-        qa = get_worker_queue_attributes message
+        qa = worker_queue_attributes message
         qa[:queue].send(qa[:enqueue], message)
       end
 
@@ -94,21 +98,10 @@ module Message
         @configuration ||= self.class.configuration
       end
 
-      def get_incoming_queue
-        @incoming_queue ||= 
-
-        #@incoming_queues ||= configuration["incoming_queues"].map{|key, path|
-        #  #here, we're going to connect to a queue given by connections[key] with path
-        #  auth = configuration['connections'][key]
-        #  connection_string = "stomp://#{auth['login']}:#{auth['passcode']}@#{auth['host']}"
-        #  client = OnStomp.connect(connection_string)
-        #  client.subscribe(path, :ack => 'client') do |m|
-        #    client.ack m
-        #    puts "GOT A MESSAGE: #{m}"
-        #  end
-        #  {key => client}
-        #}
+      def incoming_queue
+        @incoming_queue ||= connect_to_incoming_queue!
       end
+
 
       #worker-specific methods
 
@@ -118,7 +111,7 @@ module Message
         @state = :initializing
         @queue_attributes = @worker_queue = @worker_dequeue_method = nil
         begin
-          @queue_attributes = self.get_worker_queue_attributes
+          @queue_attributes = self.worker_queue_attributes
         end while @queue_attributes.nil?
 
         @worker_queue = @queue_attributes[:queue]
@@ -219,6 +212,23 @@ module Message
 
       def log severity, message
         self.class.log severity, message
+      end
+
+      def connect_to_incoming_queue!
+        incoming_queue = self.class.subscribed_incoming_queue rescue configuration['incoming_queues'].keys.first
+        auth = configuration['connections'][incoming_queue]
+        connection_string = "stomp://#{auth['login']}:#{auth['passcode']}@#{auth['host']}"
+        client = OnStomp.connect(connection_string)
+        client.subscribe(configuration['incoming_queues'][incoming_queue], :ack => 'client') do |message|
+          client.ack message
+          log :debug, message
+          on_incoming_message message
+        end
+        client
+      end
+
+      def self.subscribes_to queue_name
+        @subscribed_incoming_queue = queue_name
       end
     end
   end
