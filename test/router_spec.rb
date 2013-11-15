@@ -26,13 +26,12 @@ describe "router" do
 
       it "should have default activemq connection parameters" do
         @router.configuration['incoming_queues'].should_not be_nil
-        @router.configuration['incoming_queues'][0].should_not be_nil
-        @router.configuration['incoming_queues'][0]['test1'].should_not be_nil
+        @router.configuration['incoming_queues']['test1'].should_not be_nil
         @router.configuration['connections'].should_not be_nil
-        @router.configuration['connections'][0]['test1'].should_not be_nil
-        @router.configuration['connections'][0]['test1']['host'].should_not be_nil
-        @router.configuration['connections'][0]['test1']['login'].should_not be_nil
-        @router.configuration['connections'][0]['test1']['password'].should_not be_nil
+        @router.configuration['connections']['test1'].should_not be_nil
+        @router.configuration['connections']['test1']['host'].should_not be_nil
+        @router.configuration['connections']['test1']['login'].should_not be_nil
+        @router.configuration['connections']['test1']['password'].should_not be_nil
       end
 
       it "should allow the dev to override the default config file with ::APP_ROOT" do
@@ -70,9 +69,9 @@ describe "router" do
 
     describe ".get_incoming_queue" do
       it "should lazily connect to the configured queue" do
-        @router.instance_variables.include?(:@incoming_queue).should == false
+        @router.instance_variables.include?(:@incoming_queues).should == false
         @router.get_incoming_queue
-        @router.instance_variables.include?(:@incoming_queue).should == true
+        @router.instance_variables.include?(:@incoming_queues).should == true
       end
 
       it "should keep a persistent connection" do

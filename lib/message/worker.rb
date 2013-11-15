@@ -1,10 +1,13 @@
 require 'timeout'
 require 'json'
 require 'yaml'
-
+require 'onstomp'
 
 module Message
   module Worker
+    include OnStomp
+
+
     class Base
       attr_accessor :worker_queue, :worker_dequeue_method
       attr_reader :command_thread, :state
@@ -49,22 +52,22 @@ module Message
 
       DEFAULT_CONFIG = {
           "test" => {
-              "incoming_queues" => [
+              "incoming_queues" => {
                   "test1" => '/queue/test1'
-              ],
-              "connections" => [
+              },
+              "connections" => {
                   "test1" => {
                       "host" => '127.0.0.1',
                       "login" => 'admin',
-                      "password" => 'admin'
+                      "passcode" => 'admin'
                   }
-              ]
+              }
           }
       }
       VALID_CONFIG_KEYS = DEFAULT_CONFIG.keys
 
       def self.configure opts = {}
-        opts.each {|k,v| DEFAULT_CONFIG[::APP_ENV][k.to_sym] = v if VALID_CONFIG_KEYS.include? k.to_sym}
+        opts.each {|k,v| DEFAULT_CONFIG[::APP_ENV || "test"][k.to_sym] = v if VALID_CONFIG_KEYS.include? k.to_sym}
       end
 
       # Configure through yaml file
@@ -92,7 +95,19 @@ module Message
       end
 
       def get_incoming_queue
-        @incoming_queue ||=
+        @incoming_queue ||= 
+
+        #@incoming_queues ||= configuration["incoming_queues"].map{|key, path|
+        #  #here, we're going to connect to a queue given by connections[key] with path
+        #  auth = configuration['connections'][key]
+        #  connection_string = "stomp://#{auth['login']}:#{auth['passcode']}@#{auth['host']}"
+        #  client = OnStomp.connect(connection_string)
+        #  client.subscribe(path, :ack => 'client') do |m|
+        #    client.ack m
+        #    puts "GOT A MESSAGE: #{m}"
+        #  end
+        #  {key => client}
+        #}
       end
 
       #worker-specific methods
