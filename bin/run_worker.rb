@@ -7,6 +7,6 @@ require "./lib/message/worker"
 #  things like what worker class (a symbol) to load
 
 worker = Message::Worker::Base.new
-worker.setup
-worker.run
+worker.setup_worker
+worker.run_worker
 

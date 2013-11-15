@@ -64,7 +64,7 @@ describe "worker" do
       let(:backlog_work_queues){[mock_queue_attributes, nil, nil, nil]}
       it "should call get_worker_queue_attributes" do
         @worker.should_receive(:get_worker_queue_attributes).once.and_return(mock_queue_attributes)
-        @worker.setup
+        @worker.setup_worker
       end
 
       it "should set its state to :initializing while it is running" do
@@ -73,30 +73,30 @@ describe "worker" do
           @worker.state.should == :initializing
         end
         @worker.stub(:get_worker_queue_attributes){sleep 1; mock_queue_attributes}
-        @worker.setup
+        @worker.setup_worker
         t.join
       end
 
       it "should set its state to :idle when complete" do
-        @worker.setup
+        @worker.setup_worker
         @worker.state.should == :idle
       end
 
       it "should set a @worker_queue" do
         @worker.worker_queue.should be_nil
-        @worker.setup
+        @worker.setup_worker
         @worker.worker_queue.should_not be_nil
       end
 
       it "should set a @dequeue" do
         @worker.worker_dequeue_method.should be_nil
-        @worker.setup
+        @worker.setup_worker
         @worker.worker_dequeue_method.should == :pop
       end
 
       it "should loop until it finds a queue, if one is available" do
         @worker.stub(:get_worker_queue_attributes){backlog_work_queues.pop}
-        @worker.setup
+        @worker.setup_worker
         @worker.worker_queue.should == mock_queue_attributes[:queue]
       end
     end
@@ -114,7 +114,7 @@ describe "worker" do
 
       it "should call @worker_dequeue_method on @worker_queue" do
         @worker.stub(:get_worker_queue_attributes){mock_queue_attributes}
-        @worker.setup
+        @worker.setup_worker
         mock_queue_attributes[:queue].should_receive(mock_queue_attributes[:dequeue])
         @worker.dequeue_message
       end
@@ -123,7 +123,7 @@ describe "worker" do
         let(:mock_queue_attributes){ { :queue => [1], :dequeue => :pop, :enqueue => :push } }
         before :each do
           @worker.stub(:get_worker_queue_attributes){mock_queue_attributes}
-          @worker.setup
+          @worker.setup_worker
         end
 
         it "should return the element in the worker_queue" do
@@ -140,7 +140,7 @@ describe "worker" do
         let(:mock_queue_attributes){ { :queue => [], :dequeue => :pop, :enqueue => :push } }
         before :each do
           @worker.stub(:get_worker_queue_attributes){mock_queue_attributes}
-          @worker.setup
+          @worker.setup_worker
         end
 
         it "should return nil" do
@@ -162,7 +162,7 @@ describe "worker" do
           let(:backlog_work_queues){[]}
 
           it "should call setup" do
-            @worker.should_receive(:setup).at_least(1)
+            @worker.should_receive(:setup_worker).at_least(1)
             t = Thread.new do
               Timeout::timeout(1) do
                 @worker.get_next_job
@@ -243,7 +243,7 @@ describe "worker" do
       it "should call die instead of claiming another job" do
         @worker.should_receive(:die).exactly(1)
         @worker.spin_down
-        @worker.setup
+        @worker.setup_worker
       end
     end
 
@@ -268,7 +268,7 @@ describe "worker" do
       context "after setup, while idle" do
         it "should have a set of values, returned as a hash" do
           @worker.stub(:get_worker_queue_attributes).and_return mock_queue_attributes
-          @worker.setup
+          @worker.setup_worker
           status = @worker.status
           {   work_queue_size: 0, average_message_process_time: nil,
               total_run_time: 0, total_messages_processed: 0,
@@ -282,11 +282,11 @@ describe "worker" do
         it "should have a set of values, returned as a hash" do
           original_queue_length = mock_full_queue_attributes[:queue].length
           @worker.stub(:get_worker_queue_attributes).and_return mock_full_queue_attributes
-          @worker.setup
+          @worker.setup_worker
           @worker.stub(:process_job){sleep 0.1}
           t = Thread.new do
             Timeout::timeout 1 do
-              @worker.run
+              @worker.run_worker
             end rescue nil
           end
           sleep 0.3
