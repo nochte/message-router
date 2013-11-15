@@ -1,5 +1,7 @@
 require 'timeout'
 require 'json'
+require 'yaml'
+
 
 module Message
   module Worker
@@ -14,7 +16,8 @@ module Message
       #note: if a message is passed in, then the return should be
       #  the specific queue that the message is destined for
       def get_worker_queue_attributes message = nil
-        {:queue => [], :dequeue => :pop, :enqueue => :push}
+        @queue ||= []
+        {:queue => @queue, :dequeue => :pop, :enqueue => :push}
       end
 
       #override this method
@@ -22,7 +25,10 @@ module Message
         raise "Not implemented yet. This is where you implement your business logic"
       end
 
-      def initialize
+
+      #generic methods
+
+      def initialize args = {:router => false, :worker => true}
         @start_time = Time.now
         @state = :initializing
         @messages_processed = 0
@@ -30,8 +36,69 @@ module Message
         @command_thread = start_command_thread
       end
 
+      def enqueue_message message
+        qa = get_worker_queue_attributes message
+        qa[:queue].send(qa[:enqueue], message)
+      end
+
+      def dequeue_message
+        @worker_queue.send(@worker_dequeue_method)
+      end
+
+
+
+      DEFAULT_CONFIG = {
+          "test" => {
+              "incoming_queues" => [
+                  "test1" => '/queue/test1'
+              ],
+              "connections" => [
+                  "test1" => {
+                      "host" => '127.0.0.1',
+                      "login" => 'admin',
+                      "password" => 'admin'
+                  }
+              ]
+          }
+      }
+      VALID_CONFIG_KEYS = DEFAULT_CONFIG.keys
+
+      def self.configure opts = {}
+        opts.each {|k,v| DEFAULT_CONFIG[::APP_ENV][k.to_sym] = v if VALID_CONFIG_KEYS.include? k.to_sym}
+      end
+
+      # Configure through yaml file
+      def self.configure_with path_to_yaml_file
+        config = DEFAULT_CONFIG[::APP_ENV || "test"]
+        begin
+          config = YAML::load(IO.read(path_to_yaml_file))[::APP_ENV || "test"]
+        rescue Exception => ee
+          log(:warning, "YAML configuration file couldn't be found. Using defaults. Specific error: #{ee.to_s}")
+        end
+
+        configure(config)
+      end
+
+
+      #router-specific methods
+
+      def self.configuration
+        path = defined?(::APP_ROOT) ? (File.join(::APP_ROOT, 'config/stomp.yml')) : nil
+        @@configuration ||= configure_with(path)
+      end
+
+      def configuration
+        @configuration ||= self.class.configuration
+      end
+
+      def get_incoming_queue
+        @incoming_queue ||=
+      end
+
+      #worker-specific methods
+
       #do not override this unless you know what you're doing
-      def setup
+      def setup_worker
         die if @state == :spinning_down
         @state = :initializing
         @queue_attributes = @worker_queue = @worker_dequeue_method = nil
@@ -44,7 +111,7 @@ module Message
         @state = :idle
       end
 
-      def run
+      def run_worker
         while 1
           job = get_next_job
           @state = :working
@@ -57,19 +124,10 @@ module Message
       def get_next_job
         job = dequeue_message
         while job.nil?
-          self.setup
+          self.setup_worker
           job = dequeue_message if @worker_queue
         end
         job
-      end
-
-      def enqueue_message message
-        qa = get_worker_queue_attributes message
-        qa[:queue].send(qa[:enqueue], message)
-      end
-
-      def dequeue_message
-        @worker_queue.send(@worker_dequeue_method)
       end
 
       def long_running?
@@ -117,6 +175,7 @@ module Message
         @command_thread = Thread.new do
           while command = STDIN.gets.chomp
             retval = nil
+            command, *args = command.split(' ')
             case command.downcase
               when "status"
                 retval = status
@@ -124,12 +183,27 @@ module Message
                 retval = spin_down
               when "terminate"
                 retval = terminate
+              when "enqueue"
+                retval = enqueue_message args.join(' ')
               else
-                retval = { error: "bad_input", input: command }
+                retval = { error: "bad_input", command: command, args: args}
             end
             puts "#{retval.to_json}"
           end
         end
+      end
+
+      def self.log severity, message
+        if !@logger.nil?
+          @logger.log severity, message
+        else
+          tolog = "#{Time.now.to_s}: #{severity}: #{message}"
+          puts tolog
+        end
+      end
+
+      def log severity, message
+        self.class.log severity, message
       end
     end
   end

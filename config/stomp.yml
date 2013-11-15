@@ -1,0 +1,23 @@
+test:
+  incoming_queues:
+    test1: '/queue/test1'
+    test2: '/queue/test2'
+    test3: '/queue/test3'
+    test4: '/queue/test4'
+  connections:
+    test2:
+      host: 'alt.host.com'
+      login: 'altuser'
+      passcode: 'altpass'
+    test3,test4:
+      host: 'multi.host.com'
+      login: 'multiuser'
+      passcode: 'multipass'
+test2:
+  incoming_queues:
+    test5: '/queue/test5'
+  connections:
+    test5:
+      host: 'third.host.com'
+      login: 'altuser'
+      passcode: 'altpass'
