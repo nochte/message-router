@@ -9,9 +9,10 @@ module Message
 
     class Base
       attr_accessor :worker_queue, :worker_dequeue_method
-      attr_reader :command_thread, :state
+      attr_reader :command_thread, :state, :monitor_thread
 
       MINIMUM_RESULTS_TO_KEEP = 20
+      MONITOR_THREAD_RESPAWN_TIME = 1
       @@is_persistent = false
 
       #override this method
@@ -229,6 +230,22 @@ module Message
 
       def self.subscribes_to queue_name
         @subscribed_incoming_queue = queue_name
+      end
+
+      def start_monitor_thread
+        Thread.new do
+          while 1
+            if @monitor_thread.nil? || !@monitor_thread.alive?
+              @monitor_thread = Thread.new do
+                while 1
+                  puts "Monitor loop"
+                  sleep 5
+                end
+              end
+            end
+            sleep MONITOR_THREAD_RESPAWN_TIME
+          end
+        end
       end
     end
   end

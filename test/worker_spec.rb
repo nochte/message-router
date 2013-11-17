@@ -255,7 +255,7 @@ describe "worker" do
 
     describe ".status" do
       context "without being initialized" do
-        it "should have a set of values, returned as a hash, set t" do
+        it "should have a set of values, returned as a hash, set to sane defaults" do
           status = @worker.status
           {   work_queue_size: nil, average_message_process_time: nil,
               total_run_time: 0, total_messages_processed: 0,

@@ -116,8 +116,36 @@ describe "router" do
 
   end
 
-  #process management involves spinning
+  #process management involves spinning processes up and down automatically
   context "Process Management" do
-    describe
+    describe ".start_monitor_thread" do
+      before :each do
+        Message::Worker::Base::MONITOR_THREAD_RESPAWN_TIME = 0.1
+      end
+
+      after :each do
+        Message::Worker::Base::MONITOR_THREAD_RESPAWN_TIME = 1
+      end
+
+      it "should not be public" do
+        @router.respond_to?(:start_monitor_thread).should == true
+        expect { @router.start_monitor_thread }.to raise_error
+      end
+
+      it "should set @monitor_thread to be a thread" do
+        @router.send(:start_monitor_thread)
+        sleep 0.2
+        @router.monitor_thread.class.should == Thread
+      end
+
+      it "when killed, should restart the @monitor thread" do
+        @router.send(:start_monitor_thread)
+        sleep 0.2
+        @router.monitor_thread.kill
+        sleep 0.2
+        @router.monitor_thread.alive?.should == true
+      end
+
+    end
   end
 end
