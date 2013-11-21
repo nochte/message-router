@@ -118,6 +118,19 @@ describe "router" do
 
   #process management involves spinning processes up and down automatically
   context "Process Management" do
+    describe ".start_worker" do
+      it "should spawn a version of itself and make" do
+      end
+
+      it "should capture the IO ports for the spawned worker" do
+        1.should == 2
+      end
+
+      it "should record the worker and its ports into @workers array" do
+        1.should == 2
+      end
+    end
+
     describe ".start_monitor_thread" do
       before :each do
         Message::Worker::Base::MONITOR_THREAD_RESPAWN_TIME = 0.1
@@ -146,6 +159,9 @@ describe "router" do
         @router.monitor_thread.alive?.should == true
       end
 
+      it "isn't done yet" do
+        1.should == 2
+      end
     end
   end
 end
