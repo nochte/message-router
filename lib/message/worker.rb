@@ -13,7 +13,10 @@ module Message
       attr_reader :command_thread, :state, :monitor_thread, :workers
 
       MINIMUM_RESULTS_TO_KEEP = 20
+      MINIMUM_STATUS_METRICS_TO_KEEP = 10
       MONITOR_THREAD_RESPAWN_TIME = 1
+      WORKER_STATUS_POLLING_INTERVAL = 0.25
+
       @@is_persistent = false
 
       #override this method
@@ -205,7 +208,7 @@ module Message
       def log_results time
         @messages_processed_results << time
         @messages_processed += 1
-        @messages_processed_results.slice! 1, MINIMUM_RESULTS_TO_KEEP if @messages_processed_results.length > MINIMUM_RESULTS_TO_KEEP * 2
+        @messages_processed_results.slice! 0, MINIMUM_RESULTS_TO_KEEP if @messages_processed_results.length > MINIMUM_RESULTS_TO_KEEP * 2
       end
 
       def start_command_thread
@@ -262,18 +265,33 @@ module Message
 
       def start_monitor_thread
         Thread.new do
+          while @workers.nil?
+            puts "Workers are nil"
+            sleep 1
+          end
           while 1
             if @monitor_thread.nil? || !@monitor_thread.alive?
               @monitor_thread = Thread.new do
                 while 1
-                  puts "Monitor loop"
-                  sleep 5
+                  st = Time.now
+                  @workers.each do |pid, worker_hash|
+                    worker_hash[:status_history] ||= []
+                    worker_hash[:status_history] << self.class.command_worker(worker_hash, 'status')
+                    worker_hash[:status_history].slice! 0, MINIMUM_STATUS_METRICS_TO_KEEP if worker_hash[:status_history].length > MINIMUM_STATUS_METRICS_TO_KEEP * 2
+                  end
+                  et = Time.now
+                  sleep WORKER_STATUS_POLLING_INTERVAL
                 end
               end
             end
             sleep MONITOR_THREAD_RESPAWN_TIME
           end
         end
+      end
+
+      def self.command_worker worker, command
+        worker[:command].puts command
+        worker[:status].gets
       end
     end
   end

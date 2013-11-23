@@ -146,6 +146,7 @@ describe "router" do
     describe ".start_monitor_thread" do
       before :each do
         Message::Worker::Base::MONITOR_THREAD_RESPAWN_TIME = 0.1
+        @router.start_worker
       end
 
       after :each do
@@ -171,8 +172,19 @@ describe "router" do
         @router.monitor_thread.alive?.should == true
       end
 
-      it "isn't done yet" do
-        #1.should == 2
+      it "should call status on its worker threads" do
+        key = @router.workers.keys.first
+        @router.workers[key][:command].should_receive(:puts).with("status")
+        @router.send(:start_monitor_thread)
+        sleep 1
+      end
+
+      it "should lazily load worker threads' status" do
+        key = @router.workers.keys.first
+        @router.workers[key][:status_history].should be_nil
+        @router.send(:start_monitor_thread)
+        sleep 0.2
+        @router.workers[key][:status_history].should_not be_nil
       end
     end
   end
