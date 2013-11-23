@@ -10,12 +10,14 @@ module Message
 
     class Base
       attr_accessor :worker_queue, :worker_dequeue_method
-      attr_reader :command_thread, :state, :monitor_thread, :workers
+      attr_reader :command_thread, :state, :monitor_thread, :workers, :last_worker_spawned_at
 
       MINIMUM_RESULTS_TO_KEEP = 20
       MINIMUM_STATUS_METRICS_TO_KEEP = 10
       MONITOR_THREAD_RESPAWN_TIME = 1
       WORKER_STATUS_POLLING_INTERVAL = 0.25
+      DEFAULT_MINIMUM_WORKERS = 1
+      DEFAULT_MAXIMUM_WORKERS = 5
 
       @@is_persistent = false
 
@@ -77,6 +79,10 @@ module Message
                       "login" => 'admin',
                       "passcode" => 'admin'
                   }
+              },
+              "workers" => {
+                  "minimum" => 1,
+                  "maximum" => 10
               }
           }
       }
@@ -110,6 +116,14 @@ module Message
         @configuration ||= self.class.configuration
       end
 
+      def minimum_workers
+        configuration["workers"]["minimum"] || DEFAULT_MINIMUM_WORKERS rescue DEFAULT_MINIMUM_WORKERS
+      end
+
+      def maximum_workers
+        configuration["workers"]["maximum"] || DEFAULT_MAXIMUM_WORKERS rescue DEFAULT_MAXIMUM_WORKERS
+      end
+
       def incoming_queue
         @incoming_queue ||= connect_to_incoming_queue!
       end
@@ -125,12 +139,25 @@ module Message
           worker.run_worker
         end
 
-        @workers[spawnling.handle] = {
+        register_worker spawnling.handle, {
             command: command_write,
             status: status_read,
             process: spawnling,
             process_name: name
         }
+      end
+
+      def register_worker id, worker
+        @last_worker_spawned_at = Time.now
+        @workers ||= {}
+        @workers[id] = worker
+      end
+
+      def new_worker_needed?
+        return true if @last_worker_spawned_at.nil?
+        return true if @workers.length < minimum_workers
+        return false if @workers.length >= maximum_workers
+        false
       end
 
 

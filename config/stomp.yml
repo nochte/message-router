@@ -13,6 +13,9 @@ test:
       host: 'multi.host.com'
       login: 'multiuser'
       passcode: 'multipass'
+  workers:
+    minimum: 1
+    maximum: 10
 test2:
   incoming_queues:
     test5: '/queue/test5'
@@ -21,3 +24,6 @@ test2:
       host: 'third.host.com'
       login: 'altuser'
       passcode: 'altpass'
+  workers:
+    minimum: 1
+    maximum: 10

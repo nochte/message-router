@@ -141,6 +141,12 @@ describe "router" do
         worker[:status].should_not be_nil
         worker[:process].class.should == Spawnling
       end
+
+      it "should set the last worker spawn time to new" do
+        @router.last_worker_spawned_at.should == nil
+        @router.start_worker
+        (@router.last_worker_spawned_at > Time.now - 60).should be_true
+      end
     end
 
     describe ".start_monitor_thread" do
@@ -185,6 +191,68 @@ describe "router" do
         @router.send(:start_monitor_thread)
         sleep 0.2
         @router.workers[key][:status_history].should_not be_nil
+      end
+    end
+
+    context "needing to change the number of workers" do
+      describe ".new_worker_needed?" do
+        context "last_worker_spawned_at is nil" do
+          before :each do
+            @router.stub(:last_worker_spawned_at).and_return(nil)
+          end
+          after :each do
+            @router.unstub(:last_worker_spawned_at)
+          end
+
+          it "should be true" do
+            @router.new_worker_needed?.should be_true
+          end
+        end
+
+        context "last_worker_spawned_at is not long enough ago" do
+          before :each do
+            @router.stub(:last_worker_spawned_at).and_return(Time.now - 1)
+          end
+          after :each do
+            @router.unstub(:last_worker_spawned_at)
+          end
+
+          it "should be true if the number of workers is < minimum_workers" do
+            @router.workers.should be_nil
+            @router.new_worker_needed?.should be_true
+          end
+
+          it "should be false if the number of workers is >= maximum_workers" do
+            (@router.maximum_workers).times do |x|
+              @router.register_worker x, {}
+            end
+            @router.new_worker_needed?.should be_false
+          end
+        end
+
+        context "last_worker_spawned_at is a long time ago" do
+          before :each do
+            @router.stub(:last_worker_spawned_at).and_return(Time.now - 60*60*24) #a full day ago
+          end
+          after :each do
+            @router.unstub(:last_worker_spawned_at)
+          end
+
+          it "isn't done yet" do
+            1.should == 2
+          end
+        end
+
+
+        #it "should be true if last_worker_spawned_at is nil" do
+        #
+        #end
+        #
+        #it "should be false if last_worker_spawned_at is not long enough ago" do
+        #
+        #end
+        #
+        #it "should be false if the number of workers is greater than the maximum"
       end
     end
   end
