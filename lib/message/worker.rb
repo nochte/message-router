@@ -2,6 +2,7 @@ require 'timeout'
 require 'json'
 require 'yaml'
 require 'onstomp'
+require 'spawnling'
 
 module Message
   module Worker
@@ -9,7 +10,7 @@ module Message
 
     class Base
       attr_accessor :worker_queue, :worker_dequeue_method
-      attr_reader :command_thread, :state, :monitor_thread
+      attr_reader :command_thread, :state, :monitor_thread, :workers
 
       MINIMUM_RESULTS_TO_KEEP = 20
       MONITOR_THREAD_RESPAWN_TIME = 1
@@ -36,12 +37,19 @@ module Message
 
       #generic methods
 
-      def initialize args = {:router => false, :worker => true}
+      def initialize args = {:router => false, :worker => true, :command => STDIN, :status => STDOUT}
         @start_time = Time.now
         @state = :initializing
-        @messages_processed = 0
-        @messages_processed_results = [] #we're going to hold timings in this here array
-        @command_thread = start_command_thread
+        if args[:worker]
+          @messages_processed = 0
+          @command_pipe = args[:command]
+          @status_pipe = args[:status]
+          @messages_processed_results = [] #we're going to hold timings in this here array
+          @command_thread = start_command_thread
+        end
+        if args[:router]
+
+        end
       end
 
       def enqueue_message message
@@ -103,6 +111,25 @@ module Message
         @incoming_queue ||= connect_to_incoming_queue!
       end
 
+      def start_worker
+        @workers ||= {}
+        name = "#{self.class} - #{@workers.length}"
+        command_read, command_write = IO.pipe
+        status_read, status_write = IO.pipe
+        spawnling = Spawnling.new kill: true, argv: name do
+          worker = self.class.new({ router: false, worker: true, command: command_read, status: status_write })
+          worker.setup_worker
+          worker.run_worker
+        end
+
+        @workers[spawnling.handle] = {
+            command: command_write,
+            status: status_read,
+            process: spawnling,
+            process_name: name
+        }
+      end
+
 
       #worker-specific methods
 
@@ -133,6 +160,7 @@ module Message
       def get_next_job
         job = dequeue_message
         while job.nil?
+          sleep 0.01 #throttles down the CPU
           self.setup_worker
           job = dequeue_message if @worker_queue
         end
@@ -182,7 +210,7 @@ module Message
 
       def start_command_thread
         @command_thread = Thread.new do
-          while command = STDIN.gets.chomp
+          while command = @command_pipe.gets.chomp
             retval = nil
             command, *args = command.split(' ')
             case command.downcase
@@ -197,7 +225,7 @@ module Message
               else
                 retval = { error: "bad_input", command: command, args: args}
             end
-            puts "#{retval.to_json}"
+            @status_pipe.puts "#{retval.to_json}"
           end
         end
       end
