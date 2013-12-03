@@ -156,9 +156,9 @@ module Message
       end
 
       def new_worker_needed?
-        return true if @last_worker_spawned_at.nil?
-        return true if @workers.length < minimum_workers
-        return false if @workers.length >= maximum_workers
+        return true if last_worker_spawned_at.nil?
+        return true if workers.length < minimum_workers
+        return false if workers.length >= maximum_workers
         false
       end
 
@@ -243,16 +243,20 @@ module Message
         workers.inject(seed) do |stats, worker_array|
           history_summary = ::Util.summarize_history worker_array[1][:status_history]
 
-          stats[:average_work_queue_size] += history_summary["work_queue_size"] / @workers.length rescue 0
-          stats[:average_message_process_time] += history_summary["average_message_process_time"] / @workers.length rescue 0
-          stats[:average_total_run_time] += history_summary["total_run_time"] / @workers.length rescue 0
-          stats[:average_messages_processed] += history_summary["total_messages_processed"] / @workers.length rescue 0
+          stats[:average_work_queue_size] += history_summary["work_queue_size"] / workers.length rescue 0
+          stats[:average_message_process_time] += history_summary["average_message_process_time"] / workers.length rescue 0
+          stats[:average_total_run_time] += history_summary["total_run_time"] / workers.length rescue 0
+          stats[:average_messages_processed] += history_summary["total_messages_processed"] / workers.length rescue 0
           stats
         end
       end
 
       def workers
-        @workers || []
+        @workers ||= {}
+      end
+
+      def last_worker_spawned_at
+        @last_worker_spawned_at
       end
 
       protected
@@ -321,7 +325,7 @@ module Message
       def start_monitor_thread
         Thread.new do
           while @workers.nil?
-            puts "Workers are nil"
+            log :debug, "Workers are nil"
             sleep 1
           end
           while 1
@@ -329,7 +333,7 @@ module Message
               @monitor_thread = Thread.new do
                 while 1
                   st = Time.now
-                  @workers.each do |pid, worker_hash|
+                  workers.each do |pid, worker_hash|
                     worker_hash[:status_history] ||= []
                     worker_hash[:status_history] << self.class.command_worker(worker_hash, 'status')
                     worker_hash[:status_history].slice! 0, MINIMUM_STATUS_METRICS_TO_KEEP if worker_hash[:status_history].length > MINIMUM_STATUS_METRICS_TO_KEEP * 2
