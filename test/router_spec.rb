@@ -125,7 +125,7 @@ describe "router" do
       end
 
       it "should record the worker into @workers array" do
-        @router.workers.should be_nil
+        @router.workers.should == []
         @router.start_worker
         sleep 0.1
         @router.workers.class.should == Hash
@@ -150,9 +150,10 @@ describe "router" do
     end
 
     describe ".start_monitor_thread" do
+      let(:start_worker){true}
       before :each do
         Message::Worker::Base::MONITOR_THREAD_RESPAWN_TIME = 0.1
-        @router.start_worker
+        @router.start_worker if start_worker
       end
 
       after :each do
@@ -192,6 +193,67 @@ describe "router" do
         sleep 0.2
         @router.workers[key][:status_history].should_not be_nil
       end
+
+      context "the worker_status hash" do
+        before :each do
+          @router.send(:start_monitor_thread)
+          sleep 0.2
+        end
+
+        it "should have some properties" do
+          @router.respond_to?(:worker_status).should == true
+          @router.worker_status.class.should == Hash
+          status = @router.worker_status
+          status.key?(:average_work_queue_size).should == true
+          status.key?(:average_message_process_time).should == true
+          status.key?(:average_total_run_time).should == true
+          status.key?(:average_messages_processed).should == true
+        end
+
+        context "with no workers" do
+          let(:start_worker){false}
+          it "properties should all be 0" do
+            status = @router.worker_status
+            status[:average_work_queue_size].should == 0
+            status[:average_message_process_time].should == 0
+            status[:average_total_run_time].should == 0
+            status[:average_messages_processed].should == 0
+          end
+        end
+
+        context "with some workers" do
+          before :each do
+            @router.start_worker
+            keys = [@router.workers.keys.first, @router.workers.keys.last]
+            @router.workers[keys.first][:status_history] = [{
+                'work_queue_size' =>  1,
+                'average_message_process_time' =>  3,
+                'total_run_time' =>  60,
+                'total_messages_processed' =>  5,
+                'state' =>  :idle,
+                'timestamp' =>  Time.now - 2
+            }]
+
+            @router.workers[keys.last][:status_history] = [{
+                'work_queue_size' =>  5,
+                'average_message_process_time' =>  10,
+                'total_run_time' =>  30,
+                'total_messages_processed' =>  10,
+                'state' =>  :idle,
+                'timestamp' =>  Time.now - 1
+            }]
+
+          end
+
+          it "should have floats" do
+            status = @router.worker_status
+            status[:average_work_queue_size].should == 3.0
+            status[:average_message_process_time].should == 13.0/2.0
+            status[:average_total_run_time].should == 45
+            status[:average_messages_processed].should == 7.5
+          end
+        end
+      end
     end
 
     context "needing to change the number of workers" do
@@ -218,7 +280,7 @@ describe "router" do
           end
 
           it "should be true if the number of workers is < minimum_workers" do
-            @router.workers.should be_nil
+            @router.workers.should == []
             @router.new_worker_needed?.should be_true
           end
 
@@ -238,8 +300,16 @@ describe "router" do
             @router.unstub(:last_worker_spawned_at)
           end
 
-          it "isn't done yet" do
-            1.should == 2
+          it "should be true if the number of workers is < minimum_workers" do
+
+          end
+
+          it "should be false if the number of workers is >= maximum_workers" do
+
+          end
+
+          context "the number of workers is >= minimum_workers and < maximum_workers" do
+            it "should be true if the percentage_id"
           end
         end
 

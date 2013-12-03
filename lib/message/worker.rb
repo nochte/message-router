@@ -3,6 +3,8 @@ require 'json'
 require 'yaml'
 require 'onstomp'
 require 'spawnling'
+require './lib/util'
+include Util
 
 module Message
   module Worker
@@ -10,7 +12,7 @@ module Message
 
     class Base
       attr_accessor :worker_queue, :worker_dequeue_method
-      attr_reader :command_thread, :state, :monitor_thread, :workers, :last_worker_spawned_at
+      attr_reader :command_thread, :state, :monitor_thread, :last_worker_spawned_at
 
       MINIMUM_RESULTS_TO_KEEP = 20
       MINIMUM_STATUS_METRICS_TO_KEEP = 10
@@ -207,14 +209,17 @@ module Message
       end
 
       def status
+        total_run_time = (@state == :initializing and @messages_processed == 0) ? 0 : Time.now - @start_time
+        average_message_process_time = @messages_processed_results.length > 0 ?
+            @messages_processed_results.reduce(:+) / @messages_processed_results.length.to_f :
+            nil
         {
-            work_queue_size: @worker_queue.nil? ? nil : @worker_queue.respond_to?(:length) ? @worker_queue.length : -1,
-            average_message_process_time: @messages_processed_results.length > 0 ?
-                              @messages_processed_results.reduce(:+) / @messages_processed_results.length.to_f :
-                              nil,
-            total_run_time: (@state == :initializing and @messages_processed == 0) ? 0 : Time.now - @start_time,
+            work_queue_size: @worker_queue.nil? ? 0 : @worker_queue.respond_to?(:length) ? @worker_queue.length : -1,
+            average_message_process_time: average_message_process_time,
+            total_run_time: total_run_time,
             total_messages_processed: @messages_processed,
-            state: @state
+            state: @state,
+            timestamp: Time.now
         }
       end
 
@@ -226,6 +231,29 @@ module Message
         { success: true }
       end
 
+      def worker_status
+        seed = {
+            average_work_queue_size: 0,
+            average_message_process_time: 0,
+            average_total_run_time: 0,
+            average_messages_processed: 0
+        }
+
+        #this is so far beyond hacky. someone please put it out of its misery
+        workers.inject(seed) do |stats, worker_array|
+          history_summary = ::Util.summarize_history worker_array[1][:status_history]
+
+          stats[:average_work_queue_size] += history_summary["work_queue_size"] / @workers.length rescue 0
+          stats[:average_message_process_time] += history_summary["average_message_process_time"] / @workers.length rescue 0
+          stats[:average_total_run_time] += history_summary["total_run_time"] / @workers.length rescue 0
+          stats[:average_messages_processed] += history_summary["total_messages_processed"] / @workers.length rescue 0
+          stats
+        end
+      end
+
+      def workers
+        @workers || []
+      end
 
       protected
       def die
@@ -318,7 +346,7 @@ module Message
 
       def self.command_worker worker, command
         worker[:command].puts command
-        worker[:status].gets
+        JSON.parse(worker[:status].gets)
       end
     end
   end
