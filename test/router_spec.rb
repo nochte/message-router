@@ -340,17 +340,6 @@ describe "router" do
             it "should be true if the percentage_id"
           end
         end
-
-
-        #it "should be true if last_worker_spawned_at is nil" do
-        #
-        #end
-        #
-        #it "should be false if last_worker_spawned_at is not long enough ago" do
-        #
-        #end
-        #
-        #it "should be false if the number of workers is greater than the maximum"
       end
     end
   end
