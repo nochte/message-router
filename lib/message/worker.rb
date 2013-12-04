@@ -49,6 +49,7 @@ module Message
         @state = :initializing
         if args[:worker]
           @messages_processed = 0
+          @last_status_at = Time.now
           @command_pipe = args[:command]
           @status_pipe = args[:status]
           @messages_processed_results = [] #we're going to hold timings in this here array
@@ -209,17 +210,25 @@ module Message
       end
 
       def status
-        total_run_time = (@state == :initializing and @messages_processed == 0) ? 0 : Time.now - @start_time
-        average_message_process_time = @messages_processed_results.length > 0 ?
-            @messages_processed_results.reduce(:+) / @messages_processed_results.length.to_f :
-            nil
+        total_run_time = Time.now - @start_time
+        total_process_time = @messages_processed_results.reduce(:+).to_f
+        average_message_process_time = @messages_processed_results.length == 0 ? 0 : total_process_time / @messages_processed_results.length.to_f
+        status_window = Time.now - @last_status_at
+        idle_time = (status_window - total_process_time)
+        idle_time_percentage = idle_time / status_window * 100
+
+        @messages_processed_results.clear
+        @last_status_at = Time.now
+
         {
             work_queue_size: @worker_queue.nil? ? 0 : @worker_queue.respond_to?(:length) ? @worker_queue.length : -1,
             average_message_process_time: average_message_process_time,
             total_run_time: total_run_time,
             total_messages_processed: @messages_processed,
             state: @state,
-            timestamp: Time.now
+            timestamp: Time.now,
+            idle_time: idle_time,
+            idle_time_percentage: idle_time_percentage
         }
       end
 
@@ -267,7 +276,6 @@ module Message
       def log_results time
         @messages_processed_results << time
         @messages_processed += 1
-        @messages_processed_results.slice! 0, MINIMUM_RESULTS_TO_KEEP if @messages_processed_results.length > MINIMUM_RESULTS_TO_KEEP * 2
       end
 
       def start_command_thread
