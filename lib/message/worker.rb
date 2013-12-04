@@ -342,6 +342,7 @@ module Message
         Thread.new do
           while @workers.nil?
             log :debug, "Workers are nil"
+            start_worker if new_worker_needed?
             sleep 1
           end
           log :debug, "Starting monitor thread"
@@ -356,6 +357,7 @@ module Message
                     worker_hash[:status_history].slice! 0, MINIMUM_STATUS_METRICS_TO_KEEP if worker_hash[:status_history].length > MINIMUM_STATUS_METRICS_TO_KEEP * 2
                   end
                   et = Time.now
+                  start_worker if new_worker_needed?
                   sleep WORKER_STATUS_POLLING_INTERVAL
                 end
               end
