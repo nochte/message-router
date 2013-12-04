@@ -56,7 +56,7 @@ module Message
           @command_thread = start_command_thread
         end
         if args[:router]
-          @monitor_thread = start_monitor_thread
+          start_monitor_thread
         end
       end
 
