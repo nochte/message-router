@@ -7,7 +7,7 @@ describe "router" do
 
   before :each do
     ::APP_ENV = "test"
-    @router = Message::Worker::Base.new(:router => true, :worker => false)
+    @router = Message::Worker::Base.new(:router => false, :worker => false) #setting to false to keep threads from starting
   end
 
   after :each do
