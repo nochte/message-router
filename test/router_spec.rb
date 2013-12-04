@@ -113,7 +113,7 @@ describe "router" do
 
   #c&c involves calling on the router to get stats, manually spin up or down workers
   context "Command and Control" do
-
+    it "isn't implemented yet"
   end
 
   #process management involves spinning processes up and down automatically
@@ -196,8 +196,15 @@ describe "router" do
 
       context "the worker_status hash" do
         before :each do
+          @router.stub(:minimum_workers).and_return(0)
+          @router.stub(:new_worker_needed?).and_return(false)
           @router.send(:start_monitor_thread)
           sleep 0.2
+        end
+
+        after :each do
+          @router.unstub(:minimum_workers)
+          @router.unstub(:new_worker_needed?)
         end
 
         it "should have some properties" do
@@ -244,7 +251,6 @@ describe "router" do
                 'state' =>  :idle,
                 'timestamp' =>  Time.now - 1
             }]
-
           end
 
           it "should have floats" do
