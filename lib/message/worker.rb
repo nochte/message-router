@@ -17,7 +17,7 @@ module Message
       MINIMUM_RESULTS_TO_KEEP = 20
       MINIMUM_STATUS_METRICS_TO_KEEP = 10
       MONITOR_THREAD_RESPAWN_TIME = 1
-      WORKER_STATUS_POLLING_INTERVAL = 0.25
+      WORKER_STATUS_POLLING_INTERVAL = 5
       DEFAULT_MINIMUM_WORKERS = 1
       DEFAULT_MAXIMUM_WORKERS = 5
 
@@ -160,6 +160,8 @@ module Message
         return true if last_worker_spawned_at.nil?
         return true if workers.length < minimum_workers
         return false if workers.length >= maximum_workers
+        status = worker_status
+        return true if status[:average_idle_time_percentage] <= 30
         false
       end
 
@@ -245,17 +247,21 @@ module Message
             average_work_queue_size: 0,
             average_message_process_time: 0,
             average_total_run_time: 0,
-            average_messages_processed: 0
+            average_messages_processed: 0,
+            average_idle_time: 0,
+            average_idle_time_percentage: 0
         }
 
         #this is so far beyond hacky. someone please put it out of its misery
         workers.inject(seed) do |stats, worker_array|
+          next (status) if worker_array.nil? || worker_array[1].nil? || worker_array[1][:status_history].nil?
           history_summary = ::Util.summarize_history worker_array[1][:status_history]
-
           stats[:average_work_queue_size] += history_summary["work_queue_size"] / workers.length rescue 0
           stats[:average_message_process_time] += history_summary["average_message_process_time"] / workers.length rescue 0
           stats[:average_total_run_time] += history_summary["total_run_time"] / workers.length rescue 0
           stats[:average_messages_processed] += history_summary["total_messages_processed"] / workers.length rescue 0
+          stats[:average_idle_time_percentage] += history_summary["idle_time_percentage"] / workers.length rescue 100
+          stats[:average_idle_time] += history_summary["idle_time"] / workers.length rescue 100
           stats
         end
       end
@@ -336,6 +342,7 @@ module Message
             log :debug, "Workers are nil"
             sleep 1
           end
+          log :debug, "Starting monitor thread"
           while 1
             if @monitor_thread.nil? || !@monitor_thread.alive?
               @monitor_thread = Thread.new do
@@ -358,7 +365,8 @@ module Message
 
       def self.command_worker worker, command
         worker[:command].puts command
-        JSON.parse(worker[:status].gets)
+        ret = JSON.parse(worker[:status].gets)
+        ret
       end
     end
   end

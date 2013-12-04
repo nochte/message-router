@@ -260,7 +260,6 @@ describe "worker" do
           {   work_queue_size: 0, average_message_process_time: 0,
               total_run_time: 0, total_messages_processed: 0, idle_time: 0, idle_time_percentage: 100,
               state: :initializing}.each do |key, expected_value|
-            puts "#{key} :: #{expected_value} ::: #{status[key]}"
             expected_value.is_a?(Numeric) ? status[key].to_i.should == expected_value.to_i : status[key].should == expected_value
           end
         end

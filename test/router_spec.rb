@@ -208,6 +208,8 @@ describe "router" do
           status.key?(:average_message_process_time).should == true
           status.key?(:average_total_run_time).should == true
           status.key?(:average_messages_processed).should == true
+          status.key?(:average_idle_time).should == true
+          status.key?(:average_idle_time_percentage).should == true
         end
 
         context "with no workers" do
@@ -337,7 +339,42 @@ describe "router" do
           end
 
           context "the number of workers is >= minimum_workers and < maximum_workers" do
-            it "should be true if the percentage_id"
+            let(:average_idle_time_percentage){50.0}
+            before :each do
+              worker_stub = {}
+              (@router.maximum_workers - 1).times do |x|
+                worker_stub[x] = "blah"
+              end
+              @router.stub(:workers).and_return(worker_stub)
+              @router.stub(:worker_status).and_return({
+                                                         average_work_queue_size: 0,
+                                                         average_message_process_time: 0,
+                                                         average_total_run_time: 0,
+                                                         average_messages_processed: 0,
+                                                         average_idle_time: 0,
+                                                         average_idle_time_percentage: average_idle_time_percentage
+                                                     })
+            end
+
+            after :each do
+              @router.unstub(:worker_status)
+            end
+
+            context "average_idle_time_percentage < 30%" do
+              let(:average_idle_time_percentage){20}
+
+              it "should be true" do
+                @router.new_worker_needed?.should == true
+              end
+            end
+
+            context "average_idle_time_percentage > 30%" do
+              let(:average_idle_time_percentage){50}
+
+              it "should be false" do
+                @router.new_worker_needed?.should == false
+              end
+            end
           end
         end
       end
