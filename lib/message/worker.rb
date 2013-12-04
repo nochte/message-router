@@ -18,6 +18,7 @@ module Message
       MINIMUM_STATUS_METRICS_TO_KEEP = 10
       MONITOR_THREAD_RESPAWN_TIME = 1
       WORKER_STATUS_POLLING_INTERVAL = 5
+      WORKER_SPAWNING_INTERVAL = 120 #seconds
       DEFAULT_MINIMUM_WORKERS = 1
       DEFAULT_MAXIMUM_WORKERS = 5
 
@@ -159,6 +160,7 @@ module Message
       def new_worker_needed?
         return true if last_worker_spawned_at.nil?
         return true if workers.length < minimum_workers
+        return false if Time.now - last_worker_spawned_at < WORKER_SPAWNING_INTERVAL
         return false if workers.length >= maximum_workers
         status = worker_status
         return true if status[:average_idle_time_percentage] <= 30

@@ -281,17 +281,45 @@ describe "router" do
             @router.unstub(:last_worker_spawned_at)
           end
 
-          it "should be true if the number of workers is < minimum_workers" do
-            @router.workers.should == {}
-            @router.new_worker_needed?.should be_true
+          context "number of workers is < minimum_workers" do
+            before :each do
+              worker_stub = {}
+              @router.stub(:workers).and_return(worker_stub)
+            end
+
+            after :each do
+              @router.unstub(:workers)
+            end
+
+            it "should be true" do
+              @router.new_worker_needed?.should be_true
+            end
           end
 
-          it "should be false if the number of workers is >= maximum_workers" do
-            (@router.maximum_workers).times do |x|
+          context "number of workers is >= minimum_workers" do
+            before :each do
+              worker_stub = {}
+              (@router.minimum_workers).times do |x|
+                worker_stub[x] = "blah"
+              end
+              @router.stub(:workers).and_return(worker_stub)
+            end
+
+            after :each do
+              @router.unstub(:workers)
+            end
+            it "should be false" do
+              @router.new_worker_needed?.should be_false
+            end
+          end
+
+          it "should be false if the number of workers is >= minimum_workers" do
+            (@router.minimum_workers).times do |x|
               @router.register_worker x, {}
             end
             @router.new_worker_needed?.should be_false
           end
+
         end
 
         context "last_worker_spawned_at is a long time ago" do
