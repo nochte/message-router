@@ -149,6 +149,118 @@ describe "router" do
       end
     end
 
+    describe ".start_monitor_service_thread" do
+      before :each do
+        @monitor_thread = {}
+        @monitor_thread.stub(:alive?).and_return(:true)
+        @router.stub(:start_monitor_thread).and_return(@monitor_thread)
+      end
+
+      after :each do
+        @router.unstub(:start_monitor_thread)
+      end
+
+      it "should set @monitor_service_thread" do
+        @router.instance_variables.include?(:@monitor_service_thread).should == false
+        @router.send :start_monitor_service_thread
+        @router.instance_variables.include?(:@monitor_service_thread).should == true
+        sleep 1
+      end
+
+      it "should call .start_monitor_thread" do
+        @router.should_receive(:start_monitor_thread)
+        @router.send :start_monitor_service_thread
+        sleep 1
+      end
+
+      context "with a dead monitor thread" do
+        before :each do
+          @monitor_thread.stub(:alive?).and_return(false)
+          Message::Worker::Base::MONITOR_THREAD_RESPAWN_TIME = 0.025
+        end
+
+        after :each do
+          @monitor_thread.stub(:alive?).and_return(true)
+        end
+
+        it "should call .start_monitor_thread again" do
+          @router.should_receive(:start_monitor_thread).at_least(2)
+          @router.send :start_monitor_service_thread
+          sleep 1
+        end
+      end
+    end
+
+    describe '.fetch_status!' do
+      context "given a bad worker" do
+        it "should throw an exception" do
+          expect {@router.send(:fetch_status!, {})}.to raise_error("Worker Unreachable")
+        end
+      end
+
+      context "given a good worker" do
+        before :each do
+          @history_item = {
+              work_queue_size: 0,
+              average_message_process_time: 0,
+              total_run_time: 0,
+              total_messages_processed: 0,
+              state: :idle,
+              timestamp: Time.now,
+              idle_time: 0,
+              idle_time_percentage: 100.0
+          }
+          @router.class.stub(:command_worker).and_return(@history_item)
+          @worker = {}
+        end
+
+        after :each do
+          @router.class.unstub(:command_worker)
+        end
+
+        it "should call command_worker with the worker and 'status'" do
+          @router.class.should_receive(:command_worker).with(@worker, 'status')
+          @router.send(:fetch_status!, @worker)
+        end
+
+        it "should create a status_history array" do
+          @worker[:status_history].should be_nil
+          @router.send(:fetch_status!, @worker)
+          @worker[:status_history].class.should == Array
+          @worker[:status_history].length.should == 1
+        end
+
+        it "should add the returned history to the status_history array" do
+          @router.send(:fetch_status!, @worker)
+          @worker[:status_history].first.should == @history_item
+        end
+
+        context "with an over-full status_history array" do
+          before :each do
+            (Message::Worker::Base::MINIMUM_STATUS_METRICS_TO_KEEP * 3).times do |i|
+              (@worker[:status_history] ||= []) << {
+                  work_queue_size: i,
+                  average_message_process_time: 0,
+                  total_run_time: 0,
+                  total_messages_processed: 0,
+                  state: :idle,
+                  timestamp: Time.now,
+                  idle_time: 0,
+                  idle_time_percentage: 100.0
+              }
+            end
+
+          end
+
+          it "should remove history_items down to MINIMUM_STATUS_METRICS_TO_KEEP" do
+            @worker[:status_history].length.should == Message::Worker::Base::MINIMUM_STATUS_METRICS_TO_KEEP * 3
+            @router.send(:fetch_status!, @worker)
+            @worker[:status_history].length.should == Message::Worker::Base::MINIMUM_STATUS_METRICS_TO_KEEP
+          end
+        end
+      end
+    end
+
     describe ".start_monitor_thread" do
       let(:start_worker){true}
       before :each do
@@ -171,27 +283,51 @@ describe "router" do
         @router.monitor_thread.class.should == Thread
       end
 
-      it "when killed, should restart the @monitor thread" do
-        @router.send(:start_monitor_thread)
-        sleep 0.2
-        @router.monitor_thread.kill
-        sleep 0.2
-        @router.monitor_thread.alive?.should == true
-      end
-
       it "should call status on its worker threads" do
-        key = @router.workers.keys.first
-        @router.workers[key][:command].should_receive(:puts).with("status")
+        worker = @router.workers.first[1]
+        @router.should_receive(:fetch_status!).with(worker)
         @router.send(:start_monitor_thread)
         sleep 1
       end
 
-      it "should lazily load worker threads' status" do
-        key = @router.workers.keys.first
-        @router.workers[key][:status_history].should be_nil
-        @router.send(:start_monitor_thread)
-        sleep 0.2
-        @router.workers[key][:status_history].should_not be_nil
+      context "with insufficient workers for the job" do
+        before :each do
+          @router.stub(:new_worker_needed?).and_return(true)
+        end
+        after :each do
+          @router.unstub(:new_worker_needed?)
+        end
+
+        it "should scale up" do
+          @router.should_receive(:start_worker)
+          @router.send(:start_monitor_thread)
+          sleep 1
+        end
+      end
+
+      context "with a dead worker" do
+        let(:start_worker){false}
+        let(:worker){
+          {
+              12345 => {
+                  :command => "Mock IO Pipe",
+                  :status => "Mock IO Pipe",
+                  :process => "Mock Spawnling Object",
+                  :process_name => "Mock Process Name",
+                  :status_history => []
+              }
+          }
+        }
+        before :each do
+          @router.stub(:fetch_status!){raise Message::Worker::DeadWorkerException.new("Stubbed")}
+          @router.register_worker(worker.keys.first, worker.values.first)
+        end
+
+        it "should clean up that worker's mess" do
+          @router.should_receive(:clean_worker!).with(worker.keys.first)
+          @router.send(:start_monitor_thread)
+          sleep 1
+        end
       end
 
       context "the worker_status hash" do
@@ -265,6 +401,35 @@ describe "router" do
     end
 
     context "needing to change the number of workers" do
+      describe ".clean_worker!" do
+        let(:worker){
+          {
+              12345 => {
+              :command => "Mock IO Pipe",
+              :status => "Mock IO Pipe",
+              :process => "Mock Spawnling Object",
+              :process_name => "Mock Process Name",
+              :status_history => []
+            }
+          }
+        }
+
+        before :each do
+          @router.workers[worker.keys.first] = worker.values.first
+        end
+
+        it "should kill the worker's process by PID" do
+          Process.should_receive(:kill).with("TERM", worker.keys.first)
+          @router.send(:clean_worker!, worker.keys.first)
+        end
+
+        it "should remove the worker from the @workers hash" do
+          @router.workers.length.should == 1
+          @router.send(:clean_worker!, worker.keys.first)
+          @router.workers.length.should == 0
+        end
+      end
+
       describe ".new_worker_needed?" do
         context "last_worker_spawned_at is nil" do
           before :each do

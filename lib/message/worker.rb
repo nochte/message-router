@@ -4,10 +4,12 @@ require 'yaml'
 require 'onstomp'
 require 'spawnling'
 require './lib/util'
+require 'timeout'
 include Util
 
 module Message
   module Worker
+    class DeadWorkerException < Exception; end
     include OnStomp
 
     class Base
@@ -57,7 +59,7 @@ module Message
           @command_thread = start_command_thread
         end
         if args[:router]
-          start_monitor_thread
+          start_monitor_service_thread
         end
       end
 
@@ -338,34 +340,68 @@ module Message
         @subscribed_incoming_queue = queue_name
       end
 
+      def start_monitor_service_thread
+        @monitor_service_thread = Thread.new do
+          while true
+            start_monitor_thread unless @monitor_thread && @monitor_thread.alive?
+            sleep MONITOR_THREAD_RESPAWN_TIME
+          end
+        end
+      end
+
       def start_monitor_thread
-        Thread.new do
+        @monitor_thread = Thread.new do
           while @workers.nil?
             log :debug, "Workers are nil"
             start_worker if new_worker_needed?
             sleep 1
           end
-          log :debug, "Starting monitor thread"
           while 1
-            if @monitor_thread.nil? || !@monitor_thread.alive?
-              @monitor_thread = Thread.new do
-                while 1
-                  st = Time.now
-                  workers.each do |pid, worker_hash|
-                    worker_hash[:status_history] ||= []
-                    worker_hash[:status_history] << self.class.command_worker(worker_hash, 'status')
-                    worker_hash[:status_history].slice! 0, MINIMUM_STATUS_METRICS_TO_KEEP if worker_hash[:status_history].length > MINIMUM_STATUS_METRICS_TO_KEEP * 2
-                  end
-                  et = Time.now
-                  start_worker if new_worker_needed?
-                  sleep WORKER_STATUS_POLLING_INTERVAL
-                end
+            st = Time.now
+            workers.each do |pid, worker_hash|
+              begin
+                fetch_status! worker_hash
+              rescue DeadWorkerException => dwe
+                log :error, "Got a dead worker: #{pid} :: #{worker_hash}"
+                clean_worker! pid
+              rescue Exception => ee
+                log :error, "Got an unknown exception: #{ee}"
               end
             end
-            sleep MONITOR_THREAD_RESPAWN_TIME
+            et = Time.now
+            log :info, "Fetched a status in #{et - st}"
+            if new_worker_needed?
+              log :info, "Starting a new worker"
+              start_worker
+            end
+            sleep WORKER_STATUS_POLLING_INTERVAL
           end
         end
       end
+
+      def fetch_status! worker
+        begin
+          Timeout::timeout(1) do
+            (worker[:status_history] ||= []) << self.class.command_worker(worker, "status")
+            if worker[:status_history].length > MINIMUM_STATUS_METRICS_TO_KEEP * 2
+              worker[:status_history].slice!(0, (worker[:status_history].length - MINIMUM_STATUS_METRICS_TO_KEEP))
+            end
+          end
+        rescue Exception => ee
+          log :error, "Worker: ERRNO389: Exception thrown #{ee.to_s}"
+          raise DeadWorkerException.new("Worker Unreachable")
+        end
+      end
+
+      def clean_worker! worker_pid
+        begin
+          Process.kill("TERM", worker_pid)
+        rescue Exception => ee
+          log :error, "Worker: ERRNO398: Worker died through external means"
+        end
+        workers.delete worker_pid
+      end
+
 
       def self.command_worker worker, command
         worker[:command].puts command
