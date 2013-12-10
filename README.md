@@ -7,7 +7,7 @@ Message::Router serves as a base class for processing of incoming activemq messa
 
 Add this line to your application's Gemfile:
 
-    gem 'message-router'
+    gem 'message_router'
 
 And then execute:
 
@@ -15,7 +15,7 @@ And then execute:
 
 Or install it yourself as:
 
-    $ gem install message-router
+    $ gem install message_router
 
 ## Usage
 
