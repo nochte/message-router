@@ -151,14 +151,21 @@ describe "router" do
 
       it "should accept worker_status" do
         @router.start_worker
-        sleep 11
+        sleep 1
         @router.should_receive(:worker_status)
         result = @router.send(:process_command, "worker_status", nil)
         result[:ok].should == true
         result[:average_work_queue_size].should_not be_nil
       end
 
-      it "should accept worker_status with a parameter"
+      it "should accept worker_status with a parameter" do
+        @router.start_worker
+        sleep 1
+        key = @router.workers.keys.first
+        result = @router.send(:process_command, "worker_status", key)
+        result[:ok].should == true
+        worker[:pid].should == key
+      end
     end
   end
 

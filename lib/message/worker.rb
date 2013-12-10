@@ -248,7 +248,9 @@ module Message
             state: @state,
             timestamp: Time.now,
             idle_time: idle_time,
-            idle_time_percentage: idle_time_percentage
+            idle_time_percentage: idle_time_percentage,
+            pid: Process.pid,
+            ok: true
         }
       end
 
@@ -260,7 +262,13 @@ module Message
         { success: true }
       end
 
-      def worker_status *args
+      def worker_status *worker_pid
+        worker_pid.flatten!
+        if worker_pid.length > 0
+          worker_pid = worker_pid[0].to_i
+          return {:worker => worker_pid, :success => false, :error => "Worker not found"} unless workers.key?(worker_pid)
+          return self.class.command_worker workers[worker_pid], "status"
+        end
         seed = {
             average_work_queue_size: 0,
             average_message_process_time: 0,
