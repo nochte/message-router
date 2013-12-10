@@ -3,7 +3,8 @@ require 'json'
 require 'yaml'
 require 'onstomp'
 require 'spawnling'
-require './lib/util'
+#require './lib/util'
+require_relative 'util'
 require 'timeout'
 include Util
 
