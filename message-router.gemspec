@@ -4,7 +4,7 @@ $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 require 'message/router/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "message-router"
+  spec.name          = "message_router"
   spec.version       = Message::Router::VERSION
   spec.authors       = ["Nate Rowland"]
   spec.email         = ["nochte@gmail.com"]
