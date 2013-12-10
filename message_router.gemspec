@@ -25,4 +25,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rake"
   spec.add_development_dependency "rspec", "~> 2.6.0"
   spec.add_dependency "onstomp", "~> 1.0.7"
+  spec.add_dependency "spawnling", :git => "https://github.com/tra/spawnling.git"
+  #gem "spawnling", :git => "https://github.com/tra/spawnling.git"
+
 end
