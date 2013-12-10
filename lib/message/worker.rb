@@ -47,10 +47,14 @@ module Message
 
       #generic methods
 
-      def initialize args = {:router => false, :worker => true, :command => STDIN, :status => STDOUT}
+      def initialize args = {:router => false, :worker => true}
+        args[:command] ||= STDIN
+        args[:status] ||= STDOUT
         @start_time = Time.now
         @state = :initializing
+        @nature = :eunuch
         if args[:worker]
+          @nature = :worker
           @messages_processed = 0
           @last_status_at = Time.now
           @command_pipe = args[:command]
@@ -59,11 +63,16 @@ module Message
           @command_thread = start_command_thread
         end
         if args[:router]
+          @nature = :router
           start_monitor_service_thread
+          @command_pipe = args[:command]
+          @status_pipe = args[:status]
+          start_command_thread
         end
       end
 
       def enqueue_message message
+        message = message.flatten if message.class == Array
         qa = worker_queue_attributes message
         qa[:queue].send(qa[:enqueue], message)
       end
@@ -134,7 +143,7 @@ module Message
         @incoming_queue ||= connect_to_incoming_queue!
       end
 
-      def start_worker
+      def start_worker *args
         @workers ||= {}
         name = "#{self.class} - #{@workers.length}"
         command_read, command_write = IO.pipe
@@ -149,8 +158,13 @@ module Message
             command: command_write,
             status: status_read,
             process: spawnling,
-            process_name: name
+            process_name: name,
+            success: true
         }
+      end
+
+      def worker_pids *_
+        {:success => true, :workers => workers.keys, :workers_count => workers.count}
       end
 
       def register_worker id, worker
@@ -210,12 +224,12 @@ module Message
         @@is_persistent
       end
 
-      def spin_down
+      def spin_down *args
         @state = :spinning_down
         { state: :spinning_down }
       end
 
-      def status
+      def status *args
         total_run_time = Time.now - @start_time
         total_process_time = @messages_processed_results.reduce(:+).to_f
         average_message_process_time = @messages_processed_results.length == 0 ? 0 : total_process_time / @messages_processed_results.length.to_f
@@ -238,7 +252,7 @@ module Message
         }
       end
 
-      def terminate
+      def terminate *args
         Thread.new do
           sleep 1
           exit 0
@@ -246,7 +260,7 @@ module Message
         { success: true }
       end
 
-      def worker_status
+      def worker_status *args
         seed = {
             average_work_queue_size: 0,
             average_message_process_time: 0,
@@ -257,7 +271,7 @@ module Message
         }
 
         #this is so far beyond hacky. someone please put it out of its misery
-        workers.inject(seed) do |stats, worker_array|
+        stats = workers.inject(seed) do |stats, worker_array|
           next (status) if worker_array.nil? || worker_array[1].nil? || worker_array[1][:status_history].nil?
           history_summary = ::Util.summarize_history worker_array[1][:status_history]
           stats[:average_work_queue_size] += history_summary["work_queue_size"] / workers.length rescue 0
@@ -268,6 +282,8 @@ module Message
           stats[:average_idle_time] += history_summary["idle_time"] / workers.length rescue 100
           stats
         end
+        stats[:ok] = true
+        stats
       end
 
       def workers
@@ -288,25 +304,40 @@ module Message
         @messages_processed += 1
       end
 
+      COMMAND_MAP = {
+          eunuch: {}, #default is no actions available
+          router: {
+              "spawn_worker" => :start_worker,
+              "start_worker" => :start_worker,
+              "kill_worker" => :clean_worker!,
+              "worker_pids" => :worker_pids,
+              "status" => :worker_status,
+              "worker_status" => :worker_status
+          },
+          worker: {
+              "status" => :status,
+              "spin_down" => :spin_down,
+              "terminate" => :terminate,
+              "enqueue" => :enqueue_message
+          }
+      }
       def start_command_thread
         @command_thread = Thread.new do
           while command = @command_pipe.gets.chomp
             retval = nil
             command, *args = command.split(' ')
-            case command.downcase
-              when "status"
-                retval = status
-              when "spin_down"
-                retval = spin_down
-              when "terminate"
-                retval = terminate
-              when "enqueue"
-                retval = enqueue_message args.join(' ')
-              else
-                retval = { error: "bad_input", command: command, args: args}
-            end
+
+            retval = process_command command, args
             @status_pipe.puts "#{retval.to_json}"
           end
+        end
+      end
+
+      def process_command command, args
+        begin
+          send COMMAND_MAP[@nature][command.downcase], args
+        rescue Exception => ee
+          { error: "bad_input", command: command, args: args, :exception => ee.inspect}
         end
       end
 
@@ -394,12 +425,24 @@ module Message
       end
 
       def clean_worker! worker_pid
+        if worker_pid.class == Array
+          worker_pid.flatten!
+          res = {}
+          res[:workers] = worker_pid.map do |pid|
+            clean_worker! pid
+          end
+          res[:success] = true
+          return res
+        end
+        worker_pid = worker_pid.to_i
+        return {:worker => worker_pid, :success => false, :error => "Worker not found"} unless workers.key?(worker_pid)
         begin
           Process.kill("TERM", worker_pid)
         rescue Exception => ee
           log :error, "Worker: ERRNO398: Worker died through external means"
         end
         workers.delete worker_pid
+        {:worker => worker_pid, :success => true}
       end
 
 

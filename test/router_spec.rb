@@ -113,7 +113,53 @@ describe "router" do
 
   #c&c involves calling on the router to get stats, manually spin up or down workers
   context "Command and Control" do
-    it "isn't implemented yet"
+    before :each do
+      @router = Message::Worker::Base.new({router: true, worker: false})
+    end
+
+    describe "initialize" do
+      it "should start_command_thread on initialization" do
+        @router.instance_variables.include?(:@command_thread).should == true
+      end
+      it "should @command_pipe to STDIN" do
+        @router.instance_variable_get(:@command_pipe).should == STDIN
+      end
+      it "should set @status_pipe to STDOUT" do
+        @router.instance_variable_get(:@status_pipe).should == STDOUT
+      end
+    end
+
+    describe "command_thread" do
+      it "should accept spawn_worker" do
+        result = @router.send(:process_command, "spawn_worker", nil)
+        result[:success].should == true
+      end
+
+      it "should accept kill_worker" do
+        @router.start_worker
+        sleep 1
+        result = @router.send(:process_command, "kill_worker", @router.workers.keys.first)
+        result[:success].should == true
+      end
+
+      it "should accept worker_pids" do
+        @router.start_worker
+        sleep 1
+        result = @router.send(:process_command, "worker_pids", nil)
+        result[:workers].include?(@router.workers.keys.first)
+      end
+
+      it "should accept worker_status" do
+        @router.start_worker
+        sleep 11
+        @router.should_receive(:worker_status)
+        result = @router.send(:process_command, "worker_status", nil)
+        result[:ok].should == true
+        result[:average_work_queue_size].should_not be_nil
+      end
+
+      it "should accept worker_status with a parameter"
+    end
   end
 
   #process management involves spinning processes up and down automatically
