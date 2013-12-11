@@ -301,7 +301,7 @@ module Message
         @last_worker_spawned_at
       end
 
-      private
+      protected
       def die
         exit 0
       end
