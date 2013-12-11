@@ -73,9 +73,9 @@ module Message
       def enqueue_message message
         puts " jjj 1"
         message = message.flatten if message.class == Array
-        puts " jjj 2"
+        puts " jjj 2: message: #{message}"
         qa = worker_queue_attributes message
-        puts " jjj 3"
+        puts " jjj 3: qa: #{qa.inspect}"
         qa[:queue].send(qa[:enqueue], message)
       end
 
