@@ -1,4 +1,4 @@
-require './lib/message/worker'
+require './lib/message_router'
 
 describe "worker" do
   let(:message){ "test message" }
