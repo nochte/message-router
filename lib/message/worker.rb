@@ -319,7 +319,8 @@ module Message
               "kill_worker" => :clean_worker!,
               "worker_pids" => :worker_pids,
               "status" => :worker_status,
-              "worker_status" => :worker_status
+              "worker_status" => :worker_status,
+              "enqueue" => :enqueue_message
           },
           worker: {
               "status" => :status,
