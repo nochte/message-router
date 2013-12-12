@@ -13,7 +13,7 @@ module Message
 
     class Base
       attr_accessor :worker_queue, :worker_dequeue_method
-      attr_reader :command_thread, :state, :monitor_thread, :last_worker_spawned_at
+      attr_reader :command_thread, :state, :monitor_thread, :last_worker_spawned_at, :subscribed_incoming_queue
 
       MINIMUM_RESULTS_TO_KEEP = 20
       MINIMUM_STATUS_METRICS_TO_KEEP = 10
@@ -23,7 +23,8 @@ module Message
       DEFAULT_MINIMUM_WORKERS = 1
       DEFAULT_MAXIMUM_WORKERS = 5
 
-      @@is_persistent = false
+      @is_persistent = true
+      @subscribed_incoming_queue = nil
 
       #override this method
       #note: if a message is passed in, then the return should be
@@ -67,6 +68,9 @@ module Message
           @command_pipe = args[:command]
           @status_pipe = args[:status]
           start_command_thread
+          if self.class.subscribed_incoming_queue
+            log :debug, "Connecting to #{incoming_queue}"
+          end
         end
       end
 
@@ -108,9 +112,9 @@ module Message
 
       # Configure through yaml file
       def self.configure_with path_to_yaml_file
-        config = DEFAULT_CONFIG[::APP_ENV || "test"]
+        config = DEFAULT_CONFIG[defined?(::APP_ENV) ? ::APP_ENV : "test"]
         begin
-          config = YAML::load(IO.read(path_to_yaml_file))[::APP_ENV || "test"]
+          config = YAML::load(IO.read(path_to_yaml_file))[defined?(::APP_ENV) ? ::APP_ENV : "test"]
         rescue Exception => ee
           log(:warning, "YAML configuration file couldn't be found. Using defaults. Specific error: #{ee.to_s}")
         end
@@ -220,7 +224,7 @@ module Message
       end
 
       def long_running?
-        @@is_persistent
+        self.class.is_persistent
       end
 
       def spin_down *args
@@ -377,6 +381,10 @@ module Message
 
       def self.subscribes_to queue_name
         @subscribed_incoming_queue = queue_name
+      end
+
+      def self.subscribed_incoming_queue
+        @subscribed_incoming_queue
       end
 
       def start_monitor_service_thread
