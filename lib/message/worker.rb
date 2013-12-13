@@ -373,8 +373,8 @@ module Message
         client = OnStomp.connect(connection_string)
         client.subscribe(configuration['incoming_queues'][incoming_queue], :ack => 'client') do |message|
           client.ack message
-          log :debug, message
-          on_incoming_message message
+          log :debug, message.body
+          on_incoming_message message.body
         end
         client
       end
