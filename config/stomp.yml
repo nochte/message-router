@@ -5,6 +5,10 @@ test:
     test3: '/queue/test3'
     test4: '/queue/test4'
   connections:
+    test1:
+      host: '127.0.0.1'
+      login: 'admin'
+      passcode: 'admin'
     test2:
       host: 'alt.host.com'
       login: 'altuser'

@@ -13,7 +13,7 @@ module Message
 
     class Base
       attr_accessor :worker_queue, :worker_dequeue_method
-      attr_reader :command_thread, :state, :monitor_thread, :last_worker_spawned_at, :subscribed_incoming_queue
+      attr_reader :command_thread, :state, :monitor_thread, :last_worker_spawned_at, :subscribed_incoming_queue, :is_persistent
 
       MINIMUM_RESULTS_TO_KEEP = 20
       MINIMUM_STATUS_METRICS_TO_KEEP = 10
@@ -23,7 +23,7 @@ module Message
       DEFAULT_MINIMUM_WORKERS = 1
       DEFAULT_MAXIMUM_WORKERS = 5
 
-      @is_persistent = true
+      @is_persistent = false
       @subscribed_incoming_queue = nil
 
       #override this method
@@ -107,14 +107,14 @@ module Message
       VALID_CONFIG_KEYS = DEFAULT_CONFIG.keys
 
       def self.configure opts = {}
-        opts.each {|k,v| DEFAULT_CONFIG[::APP_ENV || "test"][k.to_sym] = v if VALID_CONFIG_KEYS.include? k.to_sym}
+        opts.each {|k,v| DEFAULT_CONFIG[env][k.to_sym] = v if VALID_CONFIG_KEYS.include? k.to_sym}
       end
 
       # Configure through yaml file
       def self.configure_with path_to_yaml_file
-        config = DEFAULT_CONFIG[defined?(::APP_ENV) ? ::APP_ENV : "test"]
+        config = DEFAULT_CONFIG[env]
         begin
-          config = YAML::load(IO.read(path_to_yaml_file))[defined?(::APP_ENV) ? ::APP_ENV : "test"]
+          config = YAML::load(IO.read(path_to_yaml_file))[env]
         rescue Exception => ee
           log(:warning, "YAML configuration file couldn't be found. Using defaults. Specific error: #{ee.to_s}")
         end
@@ -126,7 +126,7 @@ module Message
       #router-specific methods
 
       def self.configuration
-        path = defined?(::APP_ROOT) ? (File.join(::APP_ROOT, 'config/stomp.yml')) : nil
+        path = (File.join(root, 'config/stomp.yml'))
         @@configuration ||= configure_with(path)
       end
 
@@ -367,7 +367,7 @@ module Message
       end
 
       def connect_to_incoming_queue!
-        incoming_queue = self.class.subscribed_incoming_queue rescue configuration['incoming_queues'].keys.first
+        incoming_queue = self.class.subscribed_incoming_queue || configuration['incoming_queues'].keys.first
         auth = configuration['connections'][incoming_queue]
         connection_string = "stomp://#{auth['login']}:#{auth['passcode']}@#{auth['host']}"
         client = OnStomp.connect(connection_string)
@@ -385,6 +385,10 @@ module Message
 
       def self.subscribed_incoming_queue
         @subscribed_incoming_queue
+      end
+
+      def self.is_persistent
+        @is_persistent
       end
 
       def start_monitor_service_thread
@@ -466,6 +470,14 @@ module Message
         worker[:command].puts command
         ret = JSON.parse(worker[:status].gets)
         ret
+      end
+
+      def self.root
+        ENV['APP_ROOT'].nil? ? `pwd`.chomp : ENV['APP_ROOT']
+      end
+
+      def self.env
+        ENV['APP_ENV'].nil? ? 'test' : ENV['APP_ENV']
       end
     end
   end
