@@ -154,6 +154,7 @@ module Message
         spawnling = Spawnling.new kill: true, argv: name do
           worker = self.class.new({ router: false, worker: true, command: command_read, status: status_write })
           worker.setup_worker
+          worker.reconnect
           worker.run_worker
         end
 
@@ -188,6 +189,10 @@ module Message
 
 
       #worker-specific methods
+
+      def reconnect
+        nil
+      end
 
       #do not override this unless you know what you're doing
       def setup_worker
