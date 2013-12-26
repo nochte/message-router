@@ -42,14 +42,14 @@ describe "worker" do
       it "should call the worker_queue_attribute's enqueue method with the message as a parameter" do
         worker_queue_attributes = @worker.worker_queue_attributes message
         @worker.stub(:worker_queue_attributes).and_return worker_queue_attributes
-        worker_queue_attributes[:queue].should_receive(worker_queue_attributes[:enqueue]).with(message).once
+        worker_queue_attributes[:queue].should_receive(worker_queue_attributes[:enqueue]).with(message.to_json).once
         @worker.enqueue_message message
       end
 
       it "should return queue on success" do
         worker_queue_attributes = @worker.worker_queue_attributes message
         @worker.stub(:worker_queue_attributes).and_return worker_queue_attributes
-        @worker.enqueue_message(message).should == [message]
+        @worker.enqueue_message(message).should == [message.to_json]
       end
 
       it "should raise an exception on failure" do
