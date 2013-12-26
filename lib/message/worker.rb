@@ -77,7 +77,7 @@ module Message
       def enqueue_message message
         message = message.flatten if message.class == Array
         qa = worker_queue_attributes message
-        qa[:queue].send(qa[:enqueue], message)
+        qa[:queue].send(qa[:enqueue], message.to_json)
       end
 
       def dequeue_message
