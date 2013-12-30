@@ -107,7 +107,10 @@ module Message
       VALID_CONFIG_KEYS = DEFAULT_CONFIG.keys
 
       def self.configure opts = {}
-        opts.each {|k,v| DEFAULT_CONFIG[env][k.to_sym] = v if VALID_CONFIG_KEYS.include? k.to_sym}
+        #opts.each {|k,v| DEFAULT_CONFIG[env][k.to_sym] = v if VALID_CONFIG_KEYS.include? k.to_sym}
+        opts.each {|k, v|
+          DEFAULT_CONFIG[env][k.to_sym] = v
+        }
       end
 
       # Configure through yaml file
