@@ -127,7 +127,7 @@ module Message
 
       def self.configuration
         path = (File.join(root, 'config/stomp.yml'))
-        @@configuration ||= configure_with(path)
+        @configuration ||= configure_with(path)
       end
 
       def configuration

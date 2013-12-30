@@ -11,7 +11,7 @@ describe "router" do
   end
 
   after :each do
-    Message::Worker::Base.class_eval("@@configuration = nil")
+    Message::Worker::Base.class_eval("@configuration = nil")
     ENV['APP_ENV'] = nil
     ENV['APP_ROOT'] = nil
     #Object.send :remove_const, :APP_ROOT if defined? ENV['APP_ROOT']
